@@ -37,7 +37,7 @@ class PriceSelect(ui.Select):
     async def callback(self, interaction: discord.Interaction):
         prices = {
             "Sprawdzian": ("20 PLN", "Sprawdzian (tzw. gotowiec) od wydawnictwa"),
-            "Kartkówka": ("10 PLN", "Kartkówka - możliwe opcje to: Gotowiec, Baza zadań z generatora). Cena tyczy się do maks."),
+            "Kartkówka": ("10 PLN", "Kartkówka - możliwe opcje to: Gotowiec, Baza zadań z generatora)."),
             "Dysk zwykły": ("80 PLN", "Dostęp do bazy materiałów edukacyjnych. W dysku znajdziesz same gotowce."),
             "Dysk premium": ("200 PLN", "Najszersza baza materiałów do książki: Gotowce, bazy zadań, Klasówki."),
             "Baza zadań": ("od 40 PLN", "Wszystkie dostępne zadania w generatorze do działu/tematu."),
