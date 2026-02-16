@@ -3,9 +3,10 @@ from discord.ext import commands
 from discord import app_commands, ui
 import datetime
 import os
+import asyncio
 from dotenv import load_dotenv
 
-# Wczytywanie tokenu z Environment Variables (Hosting/Zeabur)
+# Wczytywanie tokenu
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 
@@ -37,7 +38,7 @@ class PriceSelect(ui.Select):
             discord.SelectOption(label="Baza zadań", emoji="📚"),
             discord.SelectOption(label="DOSTĘP CAŁODOBOWY do Darmówek (24/7)", emoji="🔓")
         ]
-        super().__init__(placeholder="Wybierz produkt, aby zobaczyć cenę...", options=options)
+        super().__init__(placeholder="Wybierz produkt, aby zobaczyć cenę...", options=options, custom_id="price_select_persistent")
 
     async def callback(self, interaction: discord.Interaction):
         prices = {
@@ -93,56 +94,49 @@ class TicketModal(ui.Modal, title="Formularz Zakupu"):
         embed.add_field(name="Kupon", value=self.coupon.value or "Brak", inline=True)
         embed.set_footer(text=f"Stworzono: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}")
 
+        # Wysyłamy wiadomość z kontrolerem, przekazując ID właściciela ticketa
         await ticket_channel.send(content=f"<@&{ROLE_SUPPORT[0]}>", embed=embed, view=TicketControlView(interaction.user.id))
         await interaction.response.send_message(f"✅ Ticket został stworzony: {ticket_channel.mention}", ephemeral=True)
 
 class TicketControlView(ui.View):
-    def __init__(self, owner_id):
+    def __init__(self, owner_id=None):
         super().__init__(timeout=None)
         self.owner_id = owner_id
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        # Sprawdzenie czy użytkownik ma rolę z listy ROLE_SUPPORT
         if any(role.id in ROLE_SUPPORT for role in interaction.user.roles):
             return True
         await interaction.response.send_message("❌ Tylko administracja może to zrobić!", ephemeral=True)
         return False
 
-    @ui.button(label="Przejmij ticket", style=discord.ButtonStyle.success)
+    @ui.button(label="Przejmij ticket", style=discord.ButtonStyle.success, custom_id="ticket_claim")
     async def claim(self, interaction: discord.Interaction):
         await interaction.response.send_message(f"👋 Ticket przejęty przez: {interaction.user.mention}")
 
-    @ui.button(label="Wezwij użytkownika", style=discord.ButtonStyle.secondary)
+    @ui.button(label="Wezwij użytkownika", style=discord.ButtonStyle.secondary, custom_id="ticket_summon")
     async def summon(self, interaction: discord.Interaction):
-        await interaction.channel.send(f"🔔 <@{self.owner_id}>, prosimy o odpowiedź w celu kontynuacji zakupu!")
+        if self.owner_id:
+            await interaction.channel.send(f"🔔 <@{self.owner_id}>, prosimy o odpowiedź w celu kontynuacji zakupu!")
+        else:
+            await interaction.response.send_message("❌ Nie można znaleźć właściciela ticketa.", ephemeral=True)
 
-    @ui.button(label="Odprzejmij", style=discord.ButtonStyle.grey)
+    @ui.button(label="Odprzejmij", style=discord.ButtonStyle.grey, custom_id="ticket_unclaim")
     async def unclaim(self, interaction: discord.Interaction):
         await interaction.response.send_message("🔓 Ticket jest ponownie wolny.")
 
-    @ui.button(label="Zamknij ticket", style=discord.ButtonStyle.danger)
+    @ui.button(label="Zamknij ticket", style=discord.ButtonStyle.danger, custom_id="ticket_close")
     async def close(self, interaction: discord.Interaction):
         await interaction.response.send_message("🔒 Zamykanie... Pamiętaj o wystawieniu Legit Checka na kanale LC!")
-        
-        def check_lc(m):
-            return m.channel.id == CHANNEL_LEGIT_CHECK and m.author.id == self.owner_id and "+lc" in m.content.lower()
-
-        try:
-            # Czeka 5 minut na wiadomość +lc od kupującego
-            await interaction.client.wait_for('message', check=check_lc, timeout=300)
-            member = interaction.guild.get_member(self.owner_id)
-            if member:
-                role_client = interaction.guild.get_role(ROLE_CLIENT)
-                await member.add_roles(role_client)
-        except:
-            pass
-        
+        # Małe opóźnienie, żeby wiadomość zdążyła się wyświetlić
+        await asyncio.sleep(5)
         await interaction.channel.delete()
 
 class TicketOpenView(ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @ui.button(label="Stwórz ticket zakup", style=discord.ButtonStyle.primary, emoji="🛒")
+    @ui.button(label="Stwórz ticket zakup", style=discord.ButtonStyle.primary, emoji="🛒", custom_id="ticket_open_btn")
     async def open_ticket(self, interaction: discord.Interaction):
         await interaction.response.send_modal(TicketModal())
 
@@ -153,27 +147,39 @@ class MyBot(commands.Bot):
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self):
-        # Rejestracja widoków (żeby przyciski działały po restarcie)
+        # Rejestracja widoków z custom_id dla trwałości (persistent views)
         self.add_view(PriceView())
         self.add_view(TicketOpenView())
-        self.add_view(TicketControlView(0))
+        # Uwaga: TicketControlView wymaga owner_id, więc pełna trwałość po restarcie bota 
+        # dla starych ticketów wymagałaby bazy danych, ale przyciski będą "żyć" do restartu.
+        self.add_view(TicketControlView()) 
         await self.tree.sync()
+
+    async def on_message(self, message):
+        # Automatyczne nadawanie roli Klienta po napisaniu +lc na odpowiednim kanale
+        if message.channel.id == CHANNEL_LEGIT_CHECK and "+lc" in message.content.lower():
+            role_client = message.guild.get_role(ROLE_CLIENT)
+            if role_client and role_client not in message.author.roles:
+                await message.author.add_roles(role_client)
+                await message.add_reaction("✅")
+        
+        await self.process_commands(message)
 
 bot = MyBot()
 
-# --- KOMENDA SETUP (Uruchom raz!) ---
+# --- KOMENDA SETUP ---
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def setup(ctx):
     await ctx.message.delete()
 
-    # 3. Cennik
+    # Cennik
     price_ch = bot.get_channel(CHANNEL_PRICES)
     if price_ch:
         await price_ch.purge(limit=10)
         await price_ch.send(embed=discord.Embed(title="💰 CENNIK INTERAKTYWNY", description="Wybierz produkt z listy poniżej:", color=COLOR), view=PriceView())
 
-    # 4. Ticket Create
+    # Ticket Create
     ticket_ch = bot.get_channel(CHANNEL_TICKET_CREATE)
     if ticket_ch:
         await ticket_ch.purge(limit=10)
