@@ -26,7 +26,7 @@ class PriceSelect(ui.Select):
     def __init__(self):
         options = [
             discord.SelectOption(label="Sprawdzian", description="Sprawdzian (tzw. gotowiec) od wydawnictwa", emoji="📝"),
-            discord.SelectOption(label="Kartkówka", description="Kartkówka - możliwe opcje to: Gotowiec, Baza zadań z generatora). Cena tyczy się do maks. 3 tematów (kolejne tematy będą doliczane w kwocie 2 zł)", emoji="✏️"),
+            discord.SelectOption(label="Kartkówka", description="Kartkówka - możliwe opcje to: Gotowiec, Baza zadań z generatora).", emoji="✏️"),
             discord.SelectOption(label="Dysk zwykły", description="Dostęp do bazy materiałów edukacyjnych. W dysku znajdziesz same gotowce.", emoji="📂"),
             discord.SelectOption(label="Dysk premium", description="Najszersza baza materiałów do książki: Gotowce, bazy zadań, Klasówki.", emoji="💎"),
             discord.SelectOption(label="Baza zadań", description="Wszystkie dostępne zadania w generatorze do działu/tematu.", emoji="📚"),
@@ -37,7 +37,7 @@ class PriceSelect(ui.Select):
     async def callback(self, interaction: discord.Interaction):
         prices = {
             "Sprawdzian": ("20 PLN", "Sprawdzian (tzw. gotowiec) od wydawnictwa"),
-            "Kartkówka": ("10 PLN", "Kartkówka - możliwe opcje to: Gotowiec, Baza zadań z generatora). Cena tyczy się do maks. 3 tematów (kolejne tematy będą doliczane w kwocie 2 zł)"),
+            "Kartkówka": ("10 PLN", "Kartkówka - możliwe opcje to: Gotowiec, Baza zadań z generatora). Cena tyczy się do maks."),
             "Dysk zwykły": ("80 PLN", "Dostęp do bazy materiałów edukacyjnych. W dysku znajdziesz same gotowce."),
             "Dysk premium": ("200 PLN", "Najszersza baza materiałów do książki: Gotowce, bazy zadań, Klasówki."),
             "Baza zadań": ("od 40 PLN", "Wszystkie dostępne zadania w generatorze do działu/tematu."),
