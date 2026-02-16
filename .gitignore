@@ -1,7 +1,7 @@
-# Tokeny i zmienne środowiskowe
+# Tokeny i sekrety
 .env
 
-# Pliki Pythona
+# Pliki systemowe i tymczasowe
 __pycache__/
 *.py[cod]
 *$py.class
@@ -9,8 +9,3 @@ __pycache__/
 # Środowiska wirtualne
 venv/
 env/
-ENV/
-
-# Systemowe
-.DS_Store
-Thumbs.db
