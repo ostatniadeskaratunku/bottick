@@ -104,42 +104,46 @@ class TicketControlView(ui.View):
         self.owner_id = owner_id
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        # Sprawdzenie czy użytkownik ma rolę z listy ROLE_SUPPORT
         if any(role.id in ROLE_SUPPORT for role in interaction.user.roles):
             return True
         await interaction.response.send_message("❌ Tylko administracja może to zrobić!", ephemeral=True)
         return False
 
-    @ui.button(label="Przejmij ticket", style=discord.ButtonStyle.success, custom_id="ticket_claim")
+    @ui.button(label="Przejmij ticket", style=discord.ButtonStyle.success, custom_id="btn_claim")
     async def claim(self, interaction: discord.Interaction):
         await interaction.response.send_message(f"👋 Ticket przejęty przez: {interaction.user.mention}")
 
-    @ui.button(label="Wezwij użytkownika", style=discord.ButtonStyle.secondary, custom_id="ticket_summon")
+    @ui.button(label="Wezwij użytkownika", style=discord.ButtonStyle.secondary, custom_id="btn_summon")
     async def summon(self, interaction: discord.Interaction):
         if self.owner_id:
-            await interaction.channel.send(f"🔔 <@{self.owner_id}>, prosimy o odpowiedź w celu kontynuacji zakupu!")
+            await interaction.channel.send(f"🔔 <@{self.owner_id}>, prosimy o odpowiedź!")
         else:
-            await interaction.response.send_message("❌ Nie można znaleźć właściciela ticketa.", ephemeral=True)
+            await interaction.response.send_message("❌ Nie można wezwać (brak ID właściciela).", ephemeral=True)
 
-    @ui.button(label="Odprzejmij", style=discord.ButtonStyle.grey, custom_id="ticket_unclaim")
+    @ui.button(label="Odprzejmij", style=discord.ButtonStyle.grey, custom_id="btn_unclaim")
     async def unclaim(self, interaction: discord.Interaction):
         await interaction.response.send_message("🔓 Ticket jest ponownie wolny.")
 
-    @ui.button(label="Zamknij ticket", style=discord.ButtonStyle.danger, custom_id="ticket_close")
+    @ui.button(label="Zamknij ticket", style=discord.ButtonStyle.danger, custom_id="btn_close")
     async def close(self, interaction: discord.Interaction):
-        await interaction.response.send_message("🔒 Zamykanie... Pamiętaj o wystawieniu Legit Checka na kanale LC!")
-        # Małe opóźnienie, żeby wiadomość zdążyła się wyświetlić
-        await asyncio.sleep(5)
+        await interaction.response.send_message("🔒 Zamykanie kanału...")
+        await asyncio.sleep(3)
         await interaction.channel.delete()
 
 class TicketOpenView(ui.View):
     def __init__(self):
+        # TUTAJ BYŁ BŁĄD: Musi być timeout=None dla setup_hook
         super().__init__(timeout=None)
 
     @ui.button(label="Stwórz ticket zakup", style=discord.ButtonStyle.primary, emoji="🛒", custom_id="ticket_open_btn")
     async def open_ticket(self, interaction: discord.Interaction):
         await interaction.response.send_modal(TicketModal())
 
+class PriceView(ui.View):
+    def __init__(self):
+        # Dodajemy timeout=None, aby widok był trwały
+        super().__init__(timeout=None)
+        self.add_item(PriceSelect())
 # --- BOT CLASS ---
 class MyBot(commands.Bot):
     def __init__(self):
