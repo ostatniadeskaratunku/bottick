@@ -42,7 +42,7 @@ class PriceSelect(ui.Select):
     async def callback(self, interaction: discord.Interaction):
         prices = {
             "Sprawdzian": "Cena: **20 PLN**",
-            "Kartkówka (do 3 tematów)": "Cena: **10 PLN**",
+            "Kartkówka": "Cena: **10 PLN**",
             "Dysk zwykły": "Cena: **80 PLN**",
             "Dysk premium": "Cena: **200 PLN**",
             "Baza zadań": "Cena: **od 40 PLN**",
