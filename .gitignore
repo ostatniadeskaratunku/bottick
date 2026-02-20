@@ -1,11 +1,16 @@
-# Tokeny i sekrety
+# Plik z tokenem (NAJWAŻNIEJSZE)
 .env
 
-# Pliki systemowe i tymczasowe
+# Pliki Pythona
 __pycache__/
 *.py[cod]
 *$py.class
 
-# Środowiska wirtualne
+# Środowisko wirtualne (jeśli używasz)
 venv/
 env/
+.venv/
+
+# Logi i pliki tymczasowe
+*.log
+.DS_Store
