@@ -11,25 +11,27 @@ TOKEN = os.getenv('DISCORD_TOKEN')
 
 # --- KONFIGURACJA ---
 COLOR = 0x222db4
-LOGO = "https://cdn.discordapp.com/attachments/1468939867193872619/1472337480102576301/ostatnia_deska_logo26.png"
-
 CHANNEL_PRICES = 1472372981366915214
-CHANNEL_TICKET_CREATE = 1468940303099760744
+CHANNEL_TICKET_CREATE = 1468940303099760744 # Zakupy
+CHANNEL_SUPPORT_CREATE = 1468940212204732492 # Pomoc
 CHANNEL_LEGIT_CHECK = 1468943349053526040
+
 ROLE_SUPPORT = [1468941098465366148, 1468941219030765628]
 ROLE_CLIENT = 1468941301050511412
-TICKET_CATEGORIES = [1468940949139755142, 1468940973169053817, 1468940999375192178]
 
-# --- UI: CENNIK Z OPISAMI ---
+CAT_SHOP = 1468940949139755142
+CAT_HELP = 1468940274955976786
+
+# --- UI: CENNIK ---
 class PriceSelect(ui.Select):
     def __init__(self):
         options = [
-            discord.SelectOption(label="Sprawdzian", description="Otwórz cennik: Sprawdzian", emoji="📝"),
-            discord.SelectOption(label="Kartkówka", description="Otwórz cennik: Kartkówka", emoji="✏️"),
-            discord.SelectOption(label="Dysk zwykły", description="Otwórz cennik: Dysk zwykły", emoji="📂"),
-            discord.SelectOption(label="Dysk premium", description="Otwórz cennik: Dysk premium", emoji="💎"),
-            discord.SelectOption(label="Baza zadań", description="Otwórz cennik: Baza zadań", emoji="📚"),
-            discord.SelectOption(label="DOSTĘP CAŁODOBOWY (24/7)", description="Otwórz cennik: Dostęp do darmówek całodobowy (24/7)", emoji="🔓")
+            discord.SelectOption(label="Sprawdzian", description="20 PLN", emoji="📝"),
+            discord.SelectOption(label="Kartkówka", description="10 PLN", emoji="✏️"),
+            discord.SelectOption(label="Dysk zwykły", description="80 PLN", emoji="📂"),
+            discord.SelectOption(label="Dysk premium", description="200 PLN", emoji="💎"),
+            discord.SelectOption(label="Baza zadań", description="od 40 PLN", emoji="📚"),
+            discord.SelectOption(label="DOSTĘP CAŁODOBOWY (24/7)", description="25 PLN / msc", emoji="🔓")
         ]
         super().__init__(placeholder="Wybierz produkt, aby zobaczyć szczegóły...", options=options, custom_id="price_select_persistent")
 
@@ -54,7 +56,7 @@ class PriceView(ui.View):
         super().__init__(timeout=None)
         self.add_item(PriceSelect())
 
-# --- UI: TICKETY ---
+# --- UI: MODAL ZAMÓWIENIA ---
 class TicketModal(ui.Modal, title="Formularz Zamówienia"):
     item = ui.TextInput(label="Produkt", placeholder="np. Sprawdzian...", min_length=2)
     amount = ui.TextInput(label="Ilość/Zakres", placeholder="Np. 1 sprawdzian...", min_length=1)
@@ -62,7 +64,7 @@ class TicketModal(ui.Modal, title="Formularz Zamówienia"):
     coupon = ui.TextInput(label="Kupon rabatowy", placeholder="Wpisz kod JEŚLI go posiadasz", required=False)
 
     async def on_submit(self, interaction: discord.Interaction):
-        category = discord.utils.get(interaction.guild.categories, id=TICKET_CATEGORIES[0])
+        category = interaction.guild.get_channel(CAT_SHOP)
         ticket_ch = await interaction.guild.create_text_channel(
             name=f"🛒-{interaction.user.name}",
             category=category,
@@ -72,15 +74,16 @@ class TicketModal(ui.Modal, title="Formularz Zamówienia"):
             }
         )
         embed = discord.Embed(title="🎫 NOWE ZAMÓWIENIE", color=COLOR)
-        embed.add_field(name="👤 Klient", value=f"{interaction.user.mention}", inline=False)
+        embed.add_field(name="👤 Klient", value=interaction.user.mention, inline=False)
         embed.add_field(name="📦 Produkt", value=self.item.value, inline=True)
         embed.add_field(name="🔢 Ilość", value=self.amount.value, inline=True)
         embed.add_field(name="💳 Płatność", value=self.payment.value, inline=True)
-        embed.add_field(name="🎟️ Kupon", value=self.coupon.value if self.coupon.value else "Brak", inline=True)
+        embed.add_field(name="🎟️ Kupon", value=self.coupon.value or "Brak", inline=True)
         
         await ticket_ch.send(content=f"<@&{ROLE_SUPPORT[0]}>", embed=embed, view=TicketControlView(interaction.user.id))
         await interaction.response.send_message(f"✅ Ticket otwarty: {ticket_ch.mention}", ephemeral=True)
 
+# --- UI: KONTROLA TICKETA ---
 class TicketControlView(ui.View):
     def __init__(self, owner_id=None):
         super().__init__(timeout=None)
@@ -93,41 +96,64 @@ class TicketControlView(ui.View):
         await interaction.message.edit(embed=embed)
         await interaction.response.send_message(f"👋 {interaction.user.mention} przejął ticket.")
 
-    @ui.button(label="Wezwij (PV)", style=discord.ButtonStyle.secondary, custom_id="btn_summon", emoji="🔔")
-    async def summon(self, interaction: discord.Interaction, button: ui.Button):
-        user = interaction.guild.get_member(self.owner_id)
-        if user:
-            try:
-                await user.send(f"🔔 Personel czeka na Ciebie w tickecie: {interaction.channel.mention}")
-                await interaction.response.send_message("✅ Wysłano powiadomienie PV.", ephemeral=True)
-            except:
-                await interaction.response.send_message("❌ Zablokowane PV!", ephemeral=True)
-
-    @ui.button(label="Zamknij + Ranga", style=discord.ButtonStyle.danger, custom_id="btn_close", emoji="🔒")
+    @ui.button(label="Zamknij (5h)", style=discord.ButtonStyle.danger, custom_id="btn_close", emoji="🔒")
     async def close(self, interaction: discord.Interaction, button: ui.Button):
+        # Jeśli owner_id nie jest przekazany (po restarcie), próbujemy go wyciągnąć z embeda
+        if not self.owner_id:
+            try:
+                self.owner_id = int(interaction.message.embeds[0].fields[0].value.replace('<@', '').replace('>', '').replace('!', ''))
+            except:
+                return await interaction.response.send_message("❌ Błąd identyfikacji właściciela.", ephemeral=True)
+
         user = interaction.guild.get_member(self.owner_id)
         role = interaction.guild.get_role(ROLE_CLIENT)
+        
         if user and role:
             await user.add_roles(role)
-        
-        # Wyślij instrukcję na kanał i na PV
-        msg = (f"✅ <@{self.owner_id}>, ranga Klienta została nadana!\n"
-               f"Ostatni krok: wystaw opinię na <#{CHANNEL_LEGIT_CHECK}> wpisując `+lc TWOJA OPINIA`.\n"
-               "Gdy to zrobisz, ten kanał zostanie automatycznie usunięty.")
-        
-        await interaction.response.send_message(msg)
-        try:
-            embed_dm = discord.Embed(title="🔒 Twój ticket został zakończony", description=msg, color=COLOR)
-            await user.send(embed=embed_dm)
-        except: pass
 
+        msg_text = (f"✅ **Dziękujemy za zakupy!**\n\n"
+                   f"Ranga <@&{ROLE_CLIENT}> została nadana.\n"
+                   f"Będziemy wdzięczni za opinię na kanale <#{CHANNEL_LEGIT_CHECK}>.\n"
+                   f"**Ten kanał zostanie automatycznie usunięty za 5 godzin.**")
+
+        embed_info = discord.Embed(title="🔒 Ticket Zamknięty", description=msg_text, color=discord.Color.red())
+        
+        await interaction.response.send_message(embed=embed_info)
+        
+        if user:
+            try: await user.send(embed=embed_info)
+            except: pass
+
+        # Logika usuwania po 5 godzinach (18000 sekund)
+        await asyncio.sleep(18000)
+        try:
+            await interaction.channel.delete()
+        except:
+            pass
+
+# --- UI: OTWIERANIE ---
 class TicketOpenView(ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @ui.button(label="Otwórz Ticket Zakupowy", style=discord.ButtonStyle.primary, emoji="🛒", custom_id="ticket_open_btn")
-    async def open_ticket(self, interaction: discord.Interaction, button: ui.Button):
+    @ui.button(label="Otwórz Ticket Zakupowy", style=discord.ButtonStyle.primary, emoji="🛒", custom_id="t_shop")
+    async def open_shop(self, interaction: discord.Interaction, button: ui.Button):
         await interaction.response.send_modal(TicketModal())
+
+    @ui.button(label="Pomoc / Pytanie", style=discord.ButtonStyle.secondary, emoji="🆘", custom_id="t_help")
+    async def open_help(self, interaction: discord.Interaction, button: ui.Button):
+        category = interaction.guild.get_channel(CAT_HELP)
+        ticket_ch = await interaction.guild.create_text_channel(
+            name=f"🆘-{interaction.user.name}",
+            category=category,
+            overwrites={
+                interaction.guild.default_role: discord.PermissionOverwrite(read_messages=False),
+                interaction.user: discord.PermissionOverwrite(read_messages=True, send_messages=True),
+            }
+        )
+        embed = discord.Embed(title="🆘 POMOC / PYTANIE", description=f"Witaj {interaction.user.mention}, opisz w czym możemy Ci pomóc.", color=COLOR)
+        await ticket_ch.send(content=f"<@&{ROLE_SUPPORT[0]}>", embed=embed, view=TicketControlView(interaction.user.id))
+        await interaction.response.send_message(f"✅ Ticket pomocy otwarty: {ticket_ch.mention}", ephemeral=True)
 
 # --- BOT MAIN ---
 class MyBot(commands.Bot):
@@ -140,35 +166,28 @@ class MyBot(commands.Bot):
         self.add_view(TicketControlView())
         await self.tree.sync()
 
-    async def on_message(self, message):
-        if message.author.bot: return
-
-        # LOGIKA AUTOMATYCZNEGO KASOWANIA TICKETA PO +LC
-        if message.channel.id == CHANNEL_LEGIT_CHECK and "+lc" in message.content.lower():
-            # Szukamy kanału ticketu tego użytkownika
-            # Nazwa kanału to zakup-nazwa lub 🛒-nazwa
-            search_name = f"🛒-{message.author.name}".lower()
-            for channel in message.guild.text_channels:
-                if channel.name.lower() == search_name:
-                    await channel.send("🚀 Opinia wystawiona! Usuwam kanał za 10 sekund...")
-                    await asyncio.sleep(10)
-                    await channel.delete()
-                    break
-        
-        await self.process_commands(message)
-
 bot = MyBot()
 
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def setup(ctx):
     await ctx.message.delete()
+    
+    # Kanał Cennik
     p_ch = bot.get_channel(CHANNEL_PRICES)
     if p_ch:
-        await p_ch.send(embed=discord.Embed(title="💰 CENNIK", color=COLOR), view=PriceView())
+        await p_ch.send(embed=discord.Embed(title="💰 CENNIK USŁUG", description="Wybierz produkt z listy poniżej, aby poznać szczegóły.", color=COLOR), view=PriceView())
+    
+    # Kanał Zakupy
     t_ch = bot.get_channel(CHANNEL_TICKET_CREATE)
     if t_ch:
-        await t_ch.send(embed=discord.Embed(title="🛒 ZAKUPY", color=COLOR), view=TicketOpenView())
-    await ctx.send("✅ Gotowe!", delete_after=5)
+        await t_ch.send(embed=discord.Embed(title="🛒 ZAKUPY", description="Kliknij przycisk poniżej, aby wypełnić formularz zamówienia.", color=COLOR), view=TicketOpenView())
+
+    # Kanał Pomoc
+    h_ch = bot.get_channel(CHANNEL_SUPPORT_CREATE)
+    if h_ch:
+        await h_ch.send(embed=discord.Embed(title="🆘 CENTRUM POMOCY", description="Masz pytanie? Potrzebujesz wsparcia? Otwórz ticket.", color=COLOR), view=TicketOpenView())
+
+    await ctx.send("✅ Systemy zostały zainicjowane pomyślnie.", delete_after=5)
 
 bot.run(TOKEN)
